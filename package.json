@@ -1,0 +1,17 @@
+{
+  "name": "obsidian-graph-label-above",
+  "version": "1.0.0",
+  "description": "Moves graph view node labels above nodes instead of below",
+  "main": "main.js",
+  "scripts": {
+    "dev": "node esbuild.config.mjs",
+    "build": "node esbuild.config.mjs production"
+  },
+  "devDependencies": {
+    "@types/node": "^16.11.6",
+    "esbuild": "0.17.3",
+    "obsidian": "latest",
+    "tslib": "2.4.0",
+    "typescript": "5.0.4"
+  }
+}
