@@ -1,0 +1,10 @@
+{
+  "id": "graph-label-above",
+  "name": "Graph Label Above",
+  "version": "1.0.0",
+  "minAppVersion": "1.0.0",
+  "description": "Moves graph view node labels above nodes to prevent cursor overlap. Accessibility fix for enlarged mouse pointers.",
+  "author": "James Farley",
+  "authorUrl": "https://smagile.co",
+  "isDesktopOnly": true
+}
