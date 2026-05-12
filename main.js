@@ -38,7 +38,7 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new GraphLabelSettingTab(this.app, this));
-    console.log("[graph-label-above] loaded");
+    console.debug("[graph-label-above] loaded");
     this.app.workspace.onLayoutReady(() => this.tryPatchAll());
     this.registerEvent(this.app.workspace.on("layout-change", () => this.tryPatchAll()));
     this.registerEvent(this.app.workspace.on("active-leaf-change", () => this.tryPatchAll()));
@@ -56,7 +56,7 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
     for (const leaf of this.app.workspace.getLeavesOfType("3d-graph-view")) {
       this.apply3DOffset(leaf.view, 1);
     }
-    console.log("[graph-label-above] unloaded");
+    console.debug("[graph-label-above] unloaded");
   }
   async loadSettings() {
     this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
@@ -71,7 +71,8 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
       const renderer = (_a = leaf.view) == null ? void 0 : _a.renderer;
       if (renderer == null ? void 0 : renderer.nodes) {
         for (const node of renderer.nodes) {
-          node.rendered && ((_b = node.render) == null ? void 0 : _b.call(node));
+          if (node.rendered)
+            (_b = node.render) == null ? void 0 : _b.call(node);
         }
       }
     }
@@ -87,7 +88,6 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
       this.tryPatch3DLeaf(leaf);
     }
   }
-  // ── 2D graph (Pixi.js) ────────────────────────────────────────────────────
   tryPatch2DLeaf(leaf) {
     var _a, _b;
     try {
@@ -103,7 +103,7 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
       if (!proto.__origGraphRender) {
         proto.__origGraphRender = proto.render;
       }
-      const plugin = this;
+      const getSettings = () => this.settings;
       const origRender = proto.__origGraphRender;
       proto.render = function(...args) {
         var _a2, _b2, _c, _d, _e, _f, _g;
@@ -117,11 +117,12 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
         const c = (_b2 = (_a2 = this.getSize) == null ? void 0 : _a2.call(this)) != null ? _b2 : 10;
         const f = (_c = r.nodeScale) != null ? _c : 1;
         const l = (_d = this.moveText) != null ? _d : 0;
-        const mult = plugin.settings.offsetMultiplier / 100;
+        const settings = getSettings();
+        const mult = settings.offsetMultiplier / 100;
         text.anchor.y = 1;
         text.y = this.y - (c + 5) * f * mult - l / ((_e = r.scale) != null ? _e : 1);
-        if (plugin.settings.useCustomColor) {
-          text.style.fill = plugin.settings.customColor;
+        if (settings.useCustomColor) {
+          text.style.fill = settings.customColor;
         } else {
           const themeRgb = (_g = (_f = r.colors) == null ? void 0 : _f.text) == null ? void 0 : _g.rgb;
           if (themeRgb !== void 0) {
@@ -130,15 +131,15 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
         }
       };
       this.patchedProto2D = proto;
-      console.log("[graph-label-above] patched 2D graph renderer");
+      console.debug("[graph-label-above] patched 2D graph renderer");
       for (const node of nodes) {
-        node.rendered && ((_b = node.render) == null ? void 0 : _b.call(node));
+        if (node.rendered)
+          (_b = node.render) == null ? void 0 : _b.call(node);
       }
     } catch (e) {
       console.warn("[graph-label-above] 2D patch failed:", e);
     }
   }
-  // ── 3D graph (Three.js sprites) ───────────────────────────────────────────
   tryPatch3DLeaf(leaf) {
     var _a;
     try {
@@ -151,7 +152,7 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
       if (!proto.__origCreateNodeObject) {
         proto.__origCreateNodeObject = proto.createNodeObject;
       }
-      const plugin = this;
+      const getSettings = () => this.settings;
       const origCreate = proto.__origCreateNodeObject;
       proto.createNodeObject = function(...args) {
         var _a2;
@@ -159,21 +160,20 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
         for (const child of (_a2 = group == null ? void 0 : group.children) != null ? _a2 : []) {
           if (child.type === "Sprite" && child.position) {
             child.__naturalY = child.position.y;
-            child.position.y = child.__naturalY * (plugin.settings.offsetMultiplier / 100);
+            child.position.y = child.__naturalY * (getSettings().offsetMultiplier / 100);
           }
         }
         return group;
       };
       this.patchedProto3D = proto;
-      console.log("[graph-label-above] patched 3D graph renderer");
+      console.debug("[graph-label-above] patched 3D graph renderer");
       this.apply3DOffset(view, this.settings.offsetMultiplier / 100);
     } catch (e) {
       console.warn("[graph-label-above] 3D patch failed:", e);
     }
   }
-  // Walk the Three.js scene and apply mult to every sprite's natural y
   apply3DOffset(view, mult) {
-    var _a, _b;
+    var _a, _b, _c;
     try {
       const scene = (_b = (_a = view == null ? void 0 : view.graph) == null ? void 0 : _a.scene) == null ? void 0 : _b.call(_a);
       if (!scene)
@@ -184,7 +184,7 @@ var GraphLabelAbovePlugin = class extends import_obsidian.Plugin {
         for (const node of top.children) {
           if (node.type !== "Group")
             continue;
-          for (const obj of node.children) {
+          for (const obj of (_c = node.children) != null ? _c : []) {
             if (obj.type === "Sprite" && obj.position) {
               if (obj.__naturalY === void 0)
                 obj.__naturalY = obj.position.y;
@@ -205,11 +205,7 @@ var GraphLabelSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    containerEl.createEl("h2", { text: "Graph Label Above" });
-    containerEl.createEl("p", {
-      text: "Moves graph node labels above nodes so an enlarged mouse pointer does not obscure them. Works with both the built-in graph and 3D graph views.",
-      cls: "setting-item-description"
-    });
+    new import_obsidian.Setting(containerEl).setName("Graph label above").setHeading();
     let sliderDisplay;
     new import_obsidian.Setting(containerEl).setName("Label distance").setDesc("How far the label sits above the node. 100 = default. Lower = closer; higher = further away.").addSlider((slider) => {
       slider.setLimits(0, 200, 5).setValue(this.plugin.settings.offsetMultiplier).onChange(async (value) => {
@@ -221,9 +217,9 @@ var GraphLabelSettingTab = class extends import_obsidian.PluginSettingTab {
         "afterend",
         createSpan({ text: this.plugin.settings.offsetMultiplier + "%" })
       );
-      sliderDisplay.style.cssText = "margin-left:10px; min-width:3em; display:inline-block;";
+      sliderDisplay.setCssStyles({ marginLeft: "10px", minWidth: "3em", display: "inline-block" });
     });
-    new import_obsidian.Setting(containerEl).setName("Custom label colour").setDesc("Override the theme text colour for graph labels. Applies to the 2D graph only.").addToggle((toggle) => {
+    new import_obsidian.Setting(containerEl).setName("Custom label colour").setDesc("Override the theme text colour for graph labels; applies to the 2D graph only.").addToggle((toggle) => {
       toggle.setValue(this.plugin.settings.useCustomColor).onChange(async (value) => {
         this.plugin.settings.useCustomColor = value;
         await this.plugin.saveSettings();

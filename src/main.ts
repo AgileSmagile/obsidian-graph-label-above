@@ -1,7 +1,7 @@
 import { Plugin, PluginSettingTab, App, Setting, WorkspaceLeaf } from "obsidian";
 
 interface GraphLabelSettings {
-  offsetMultiplier: number; // 0–200, default 100
+  offsetMultiplier: number; // 0-200, default 100
   useCustomColor: boolean;
   customColor: string;
 }
@@ -12,15 +12,73 @@ const DEFAULT_SETTINGS: GraphLabelSettings = {
   customColor: "#ffffff",
 };
 
+// Internal graph API types (not publicly exported by Obsidian)
+
+interface NodeText {
+  visible: boolean;
+  anchor: { y: number };
+  y: number;
+  style: { fill: string };
+}
+
+interface NodeRenderer {
+  nodes?: GraphNode2D[];
+  nodeScale?: number;
+  scale?: number;
+  colors?: { text?: { rgb?: number } };
+}
+
+interface GraphNode2D {
+  text?: NodeText;
+  renderer?: NodeRenderer;
+  getSize?(): number;
+  y: number;
+  moveText?: number;
+  rendered?: boolean;
+  render?(): void;
+}
+
+interface GraphNode2DProto {
+  render(this: GraphNode2D, ...args: unknown[]): void;
+  __origGraphRender?: GraphNode2DProto["render"];
+}
+
+interface Graph3DView {
+  graph?: {
+    scene?(): ThreeDScene;
+  };
+}
+
+interface ThreeDScene {
+  children: ThreeDGroup[];
+}
+
+interface ThreeDGroup {
+  type: string;
+  children: ThreeDObject[];
+}
+
+interface ThreeDObject {
+  type: string;
+  children?: ThreeDObject[];
+  position?: { y: number };
+  __naturalY?: number;
+}
+
+interface Graph3DProto {
+  createNodeObject(this: Graph3DView, ...args: unknown[]): { children?: ThreeDObject[] } | undefined;
+  __origCreateNodeObject?: Graph3DProto["createNodeObject"];
+}
+
 export default class GraphLabelAbovePlugin extends Plugin {
   settings: GraphLabelSettings;
-  private patchedProto2D: any = null;
-  private patchedProto3D: any = null;
+  private patchedProto2D: GraphNode2DProto | null = null;
+  private patchedProto3D: Graph3DProto | null = null;
 
   async onload() {
     await this.loadSettings();
     this.addSettingTab(new GraphLabelSettingTab(this.app, this));
-    console.log("[graph-label-above] loaded");
+    console.debug("[graph-label-above] loaded");
 
     this.app.workspace.onLayoutReady(() => this.tryPatchAll());
     this.registerEvent(this.app.workspace.on("layout-change", () => this.tryPatchAll()));
@@ -36,11 +94,10 @@ export default class GraphLabelAbovePlugin extends Plugin {
       this.patchedProto3D.createNodeObject = this.patchedProto3D.__origCreateNodeObject;
       delete this.patchedProto3D.__origCreateNodeObject;
     }
-    // Restore natural y on all existing 3D sprites
     for (const leaf of this.app.workspace.getLeavesOfType("3d-graph-view")) {
-      this.apply3DOffset(leaf.view, 1.0);
+      this.apply3DOffset(leaf.view as unknown as Graph3DView, 1.0);
     }
-    console.log("[graph-label-above] unloaded");
+    console.debug("[graph-label-above] unloaded");
   }
 
   async loadSettings() {
@@ -53,18 +110,16 @@ export default class GraphLabelAbovePlugin extends Plugin {
   }
 
   refreshAllNodes() {
-    // 2D graph
     for (const leaf of this.app.workspace.getLeavesOfType("graph")) {
-      const renderer = (leaf.view as any)?.renderer;
+      const renderer = (leaf.view as unknown as { renderer?: NodeRenderer })?.renderer;
       if (renderer?.nodes) {
         for (const node of renderer.nodes) {
-          node.rendered && node.render?.();
+          if (node.rendered) node.render?.();
         }
       }
     }
-    // 3D graph — reapply offset to existing sprites
     for (const leaf of this.app.workspace.getLeavesOfType("3d-graph-view")) {
-      this.apply3DOffset(leaf.view, this.settings.offsetMultiplier / 100);
+      this.apply3DOffset(leaf.view as unknown as Graph3DView, this.settings.offsetMultiplier / 100);
     }
   }
 
@@ -77,27 +132,25 @@ export default class GraphLabelAbovePlugin extends Plugin {
     }
   }
 
-  // ── 2D graph (Pixi.js) ────────────────────────────────────────────────────
-
   private tryPatch2DLeaf(leaf: WorkspaceLeaf) {
     try {
-      const renderer = (leaf.view as any)?.renderer;
+      const renderer = (leaf.view as unknown as { renderer?: NodeRenderer })?.renderer;
       if (!renderer) return;
 
-      const nodes: any[] = renderer.nodes;
+      const nodes = renderer.nodes;
       if (!nodes || !Array.isArray(nodes) || nodes.length === 0) return;
 
-      const proto = Object.getPrototypeOf(nodes[0]);
+      const proto = Object.getPrototypeOf(nodes[0]) as GraphNode2DProto;
       if (!proto?.render || typeof proto.render !== "function") return;
 
       if (!proto.__origGraphRender) {
         proto.__origGraphRender = proto.render;
       }
 
-      const plugin = this;
+      const getSettings = () => this.settings;
       const origRender = proto.__origGraphRender;
 
-      proto.render = function (this: any, ...args: any[]) {
+      proto.render = function (this: GraphNode2D, ...args: unknown[]) {
         origRender.apply(this, args);
 
         const text = this.text;
@@ -108,13 +161,14 @@ export default class GraphLabelAbovePlugin extends Plugin {
         const c: number = this.getSize?.() ?? 10;
         const f: number = r.nodeScale ?? 1;
         const l: number = this.moveText ?? 0;
-        const mult = plugin.settings.offsetMultiplier / 100;
+        const settings = getSettings();
+        const mult = settings.offsetMultiplier / 100;
 
         text.anchor.y = 1;
         text.y = this.y - (c + 5) * f * mult - l / (r.scale ?? 1);
 
-        if (plugin.settings.useCustomColor) {
-          text.style.fill = plugin.settings.customColor;
+        if (settings.useCustomColor) {
+          text.style.fill = settings.customColor;
         } else {
           const themeRgb = r.colors?.text?.rgb;
           if (themeRgb !== undefined) {
@@ -124,58 +178,52 @@ export default class GraphLabelAbovePlugin extends Plugin {
       };
 
       this.patchedProto2D = proto;
-      console.log("[graph-label-above] patched 2D graph renderer");
+      console.debug("[graph-label-above] patched 2D graph renderer");
 
       for (const node of nodes) {
-        node.rendered && node.render?.();
+        if (node.rendered) node.render?.();
       }
     } catch (e) {
       console.warn("[graph-label-above] 2D patch failed:", e);
     }
   }
 
-  // ── 3D graph (Three.js sprites) ───────────────────────────────────────────
-
   private tryPatch3DLeaf(leaf: WorkspaceLeaf) {
     try {
-      const view = leaf.view as any;
+      const view = leaf.view as unknown as Graph3DView;
       if (!view?.graph?.scene) return;
 
-      const proto = Object.getPrototypeOf(view);
+      const proto = Object.getPrototypeOf(view) as Graph3DProto;
       if (!proto?.createNodeObject || typeof proto.createNodeObject !== "function") return;
 
-      // Store true original once
       if (!proto.__origCreateNodeObject) {
         proto.__origCreateNodeObject = proto.createNodeObject;
       }
 
-      const plugin = this;
+      const getSettings = () => this.settings;
       const origCreate = proto.__origCreateNodeObject;
 
-      // Patch createNodeObject so future nodes get the right offset at birth
-      proto.createNodeObject = function (this: any, ...args: any[]) {
+      proto.createNodeObject = function (this: Graph3DView, ...args: unknown[]) {
         const group = origCreate.apply(this, args);
         for (const child of (group?.children ?? [])) {
           if (child.type === "Sprite" && child.position) {
             child.__naturalY = child.position.y;
-            child.position.y = child.__naturalY * (plugin.settings.offsetMultiplier / 100);
+            child.position.y = child.__naturalY * (getSettings().offsetMultiplier / 100);
           }
         }
         return group;
       };
 
       this.patchedProto3D = proto;
-      console.log("[graph-label-above] patched 3D graph renderer");
+      console.debug("[graph-label-above] patched 3D graph renderer");
 
-      // Fix sprites that already exist in the scene
       this.apply3DOffset(view, this.settings.offsetMultiplier / 100);
     } catch (e) {
       console.warn("[graph-label-above] 3D patch failed:", e);
     }
   }
 
-  // Walk the Three.js scene and apply mult to every sprite's natural y
-  private apply3DOffset(view: any, mult: number) {
+  private apply3DOffset(view: Graph3DView, mult: number) {
     try {
       const scene = view?.graph?.scene?.();
       if (!scene) return;
@@ -183,20 +231,19 @@ export default class GraphLabelAbovePlugin extends Plugin {
         if (top.type !== "Group") continue;
         for (const node of top.children) {
           if (node.type !== "Group") continue;
-          for (const obj of node.children) {
+          for (const obj of (node.children ?? [])) {
             if (obj.type === "Sprite" && obj.position) {
-              // Store natural y on first encounter
               if (obj.__naturalY === undefined) obj.__naturalY = obj.position.y;
               obj.position.y = obj.__naturalY * mult;
             }
           }
         }
       }
-    } catch (e) { /* swallow */ }
+    } catch { /* swallow */ }
   }
 }
 
-// ── Settings tab ─────────────────────────────────────────────────────────────
+// Settings tab
 
 class GraphLabelSettingTab extends PluginSettingTab {
   plugin: GraphLabelAbovePlugin;
@@ -210,11 +257,7 @@ class GraphLabelSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    containerEl.createEl("h2", { text: "Graph Label Above" });
-    containerEl.createEl("p", {
-      text: "Moves graph node labels above nodes so an enlarged mouse pointer does not obscure them. Works with both the built-in graph and 3D graph views.",
-      cls: "setting-item-description",
-    });
+    new Setting(containerEl).setName("Graph label above").setHeading();
 
     let sliderDisplay: HTMLSpanElement;
 
@@ -234,12 +277,12 @@ class GraphLabelSettingTab extends PluginSettingTab {
           "afterend",
           createSpan({ text: this.plugin.settings.offsetMultiplier + "%" })
         ) as HTMLSpanElement;
-        sliderDisplay.style.cssText = "margin-left:10px; min-width:3em; display:inline-block;";
+        sliderDisplay.setCssStyles({ marginLeft: "10px", minWidth: "3em", display: "inline-block" });
       });
 
     new Setting(containerEl)
       .setName("Custom label colour")
-      .setDesc("Override the theme text colour for graph labels. Applies to the 2D graph only.")
+      .setDesc("Override the theme text colour for graph labels; applies to the 2D graph only.")
       .addToggle((toggle) => {
         toggle
           .setValue(this.plugin.settings.useCustomColor)
