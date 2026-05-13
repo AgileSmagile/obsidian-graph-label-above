@@ -144,7 +144,7 @@ export default class GraphLabelAbovePlugin extends Plugin {
       if (!proto?.render || typeof proto.render !== "function") return;
 
       if (!proto.__origGraphRender) {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- intentional prototype patch; method is invoked via .apply() with explicit this binding
         proto.__origGraphRender = proto.render;
       }
 
@@ -198,7 +198,7 @@ export default class GraphLabelAbovePlugin extends Plugin {
       if (!proto?.createNodeObject || typeof proto.createNodeObject !== "function") return;
 
       if (!proto.__origCreateNodeObject) {
-        // eslint-disable-next-line @typescript-eslint/unbound-method
+        // eslint-disable-next-line @typescript-eslint/unbound-method -- intentional prototype patch; method is invoked via .apply() with explicit this binding
         proto.__origCreateNodeObject = proto.createNodeObject;
       }
 

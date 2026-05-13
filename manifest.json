@@ -1,7 +1,7 @@
 {
   "id": "graph-label-above",
   "name": "Graph Label Above",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "minAppVersion": "1.0.0",
   "description": "Accessibility improvement for node labels moving them above nodes, complete with a distance slider and optional color overrides.",
   "author": "James Farley",
