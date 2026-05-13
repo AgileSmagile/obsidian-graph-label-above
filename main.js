@@ -205,7 +205,6 @@ var GraphLabelSettingTab = class extends import_obsidian.PluginSettingTab {
   display() {
     const { containerEl } = this;
     containerEl.empty();
-    new import_obsidian.Setting(containerEl).setName("Graph label above").setHeading();
     let sliderDisplay;
     new import_obsidian.Setting(containerEl).setName("Label distance").setDesc("How far the label sits above the node. 100 = default. Lower = closer; higher = further away.").addSlider((slider) => {
       slider.setLimits(0, 200, 5).setValue(this.plugin.settings.offsetMultiplier).onChange(async (value) => {

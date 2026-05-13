@@ -101,7 +101,7 @@ export default class GraphLabelAbovePlugin extends Plugin {
   }
 
   async loadSettings() {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+    this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData() as Partial<GraphLabelSettings>);
   }
 
   async saveSettings() {
@@ -144,6 +144,7 @@ export default class GraphLabelAbovePlugin extends Plugin {
       if (!proto?.render || typeof proto.render !== "function") return;
 
       if (!proto.__origGraphRender) {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         proto.__origGraphRender = proto.render;
       }
 
@@ -197,6 +198,7 @@ export default class GraphLabelAbovePlugin extends Plugin {
       if (!proto?.createNodeObject || typeof proto.createNodeObject !== "function") return;
 
       if (!proto.__origCreateNodeObject) {
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         proto.__origCreateNodeObject = proto.createNodeObject;
       }
 
@@ -257,7 +259,6 @@ class GraphLabelSettingTab extends PluginSettingTab {
     const { containerEl } = this;
     containerEl.empty();
 
-    new Setting(containerEl).setName("Graph label above").setHeading();
 
     let sliderDisplay: HTMLSpanElement;
 
