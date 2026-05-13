@@ -34,7 +34,7 @@ This was [requested on the Obsidian forum](https://forum.obsidian.md/t/display-n
 
 ### Manual install
 
-1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/jsfarley/obsidian-graph-label-above/releases/latest)
+1. Download `main.js` and `manifest.json` from the [latest release](https://github.com/AgileSmagile/obsidian-graph-label-above/releases/latest)
 2. Create a folder at `<your vault>/.obsidian/plugins/graph-label-above/`
 3. Copy both files into that folder
 4. Settings > Community plugins > reload and enable **Graph Label Above**
