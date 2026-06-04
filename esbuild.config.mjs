@@ -4,7 +4,7 @@ import { resolve } from "path";
 const prod = process.argv[2] === "production";
 
 const outDir = resolve(
-  "C:/Users/James/Projects/sonnet-agent/Vault101/.obsidian/plugins/graph-label-above"
+  "E:/Projects/sonnet-agent/Vault101/.obsidian/plugins/graph-label-above"
 );
 
 const ctx = await esbuild.context({
